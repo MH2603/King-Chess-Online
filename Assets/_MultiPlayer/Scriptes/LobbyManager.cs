@@ -26,7 +26,7 @@ namespace MH.Lobby
         private const string DefaultRoomName = "Default Room";
         private const int MaxPlayersPerRoom = 20; // Increased max players
         [SerializeField] private ClientData _client;
-        
+        ExitGames.Client.Photon.Hashtable playerProperties = new ExitGames.Client.Photon.Hashtable();
 
         private Photon.Realtime.Player LocalPlayer => PhotonNetwork.LocalPlayer;
 
@@ -51,7 +51,7 @@ namespace MH.Lobby
         public override void OnConnectedToMaster() // call by Event
         {
             ConnectedCloud?.Invoke();
-            
+            Debug.Log("Connected Cloud !!!");
         }
 
         public void JoinLobby()
@@ -59,15 +59,19 @@ namespace MH.Lobby
             if(!CanJoinLobby()) return;
 
             PhotonNetwork.JoinLobby();
-
-            PhotonNetwork.LocalPlayer.NickName = NickNameInput.text; 
+            
         }
 
         public override void OnJoinedLobby() // call by event
         {
             JoinedLobby?.Invoke();
 
-            Debug.Log($"Lobby : {PhotonNetwork.CurrentLobby.Name} - Count Room : {PhotonNetwork.CountOfRooms}");
+            PhotonNetwork.LocalPlayer.NickName = NickNameInput.text;
+
+            InitClientData();
+            UpdateClientDataToCloud();
+
+            Debug.Log($" Joined Lobby : {PhotonNetwork.CurrentLobby.Name} - Count Room : {PhotonNetwork.CountOfRooms}");
 
             CreateOrJoinDefaultRoom();
         }
@@ -76,19 +80,29 @@ namespace MH.Lobby
         {
             JoinedDefaultRoom?.Invoke();
 
-            InitClientData();
-            UpdateClientDataToCloud();
+            Debug.Log($" Joind Room ; {PhotonNetwork.CurrentRoom.Name} - Count Clients :  {PhotonNetwork.CurrentRoom.PlayerCount}");
+
+            //PhotonNetwork.LocalPlayer.NickName = NickNameInput.text;
+
+            //InitClientData();
+            //UpdateClientDataToCloud();
 
             InitLobbyWindow();
             UILobbyWindow.Open();
 
-            Debug.Log($" Joind Room {PhotonNetwork.CurrentRoom.Name} with {PhotonNetwork.CurrentRoom.PlayerCount}");
+            
         }
 
         // Gọi khi một người chơi mới tham gia phòng
         public override void OnPlayerEnteredRoom(Player newPlayer)
         {
             Debug.Log($" New Player just join room : {newPlayer.NickName}");
+
+            ClientData client = GetClientDataFromCloud(newPlayer);
+            if (client == null) return;
+
+            UILobbyWindow.CreateNewUIPlayer(client);
+
         }
 
         #endregion
@@ -107,6 +121,7 @@ namespace MH.Lobby
             {
                 MaxPlayers = MaxPlayersPerRoom,
                 IsVisible = true,
+                PublishUserId = true,
                 IsOpen = true
             };
             PhotonNetwork.JoinOrCreateRoom(DefaultRoomName, roomOptions, TypedLobby.Default);
@@ -145,10 +160,13 @@ namespace MH.Lobby
         {
             foreach (Player player in PhotonNetwork.PlayerListOthers)
             {
-                ClientData client = GetClientDataFromCloud(player.UserId);
-                if (client != null) continue;
+                Debug.Log($" Other Client: {player.NickName}");
+
+                ClientData client = GetClientDataFromCloud(player);
+                if (client == null) continue;
 
                 UILobbyWindow.CreateNewUIPlayer(client);
+
             }
 
             UILobbyWindow.SetPlayerNum(PhotonNetwork.PlayerList.Length);
@@ -167,34 +185,66 @@ namespace MH.Lobby
             
         }
 
+        //private void UpdateClientDataToCloud()
+        //{
+        //    // convert to json
+        //    string jsonData = JsonUtility.ToJson(_client);
+
+        //    // Tạo đối tượng HashTable để chứa Custom Properties
+        //    ExitGames.Client.Photon.Hashtable roomProperties = new ExitGames.Client.Photon.Hashtable();
+        //    roomProperties[_client.Id] = jsonData;
+
+        //    // Đặt Custom Properties cho Room
+        //    PhotonNetwork.CurrentRoom.SetCustomProperties(roomProperties);
+        //}
+
+        //private ClientData GetClientDataFromCloud(string id)
+        //{
+        //    if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(id, out object jsonDataFromRoom))
+        //    {
+        //        string jsonData = (string)jsonDataFromRoom;
+        //        ClientData clientDataFromRoom = JsonUtility.FromJson<ClientData>(jsonData);
+
+        //        return clientDataFromRoom;
+        //    }
+
+        //    Debug.Log(" BUG : NOt found client data with id - " + id);
+        //    return null;
+        //}
+
         private void UpdateClientDataToCloud()
         {
-            // convert to json
+            // Convert client data to JSON
             string jsonData = JsonUtility.ToJson(_client);
 
-            // Tạo đối tượng HashTable để chứa Custom Properties
-            ExitGames.Client.Photon.Hashtable roomProperties = new ExitGames.Client.Photon.Hashtable();
-            roomProperties[_client.Id] = jsonData;
+            // Set the client data as a custom property of the local player
+            
+            playerProperties["ClientData"] = jsonData;
+            PhotonNetwork.LocalPlayer.CustomProperties = playerProperties;
+            PhotonNetwork.SetPlayerCustomProperties(playerProperties);  
 
-            // Đặt Custom Properties cho Room
-            PhotonNetwork.CurrentRoom.SetCustomProperties(roomProperties);
+            Debug.Log($"  - Send Client Data: {PhotonNetwork.LocalPlayer.CustomProperties["ClientData"]}");
         }
 
-        private ClientData GetClientDataFromCloud(string id)
+        private ClientData GetClientDataFromCloud(Photon.Realtime.Player client)
         {
-            if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(id, out object jsonDataFromRoom))
-            {
-                string jsonData = (string)jsonDataFromRoom;
-                ClientData clientDataFromRoom = JsonUtility.FromJson<ClientData>(jsonData);
+            //if (client.CustomProperties.ContainsKey("ClientData"))
+            //{
+            //    string jsonData = (string)client.CustomProperties["ClientData"];
+            //    ClientData clientDataFromPlayer = JsonUtility.FromJson<ClientData>(jsonData);
+            //    return clientDataFromPlayer;
+            //}
 
-                return clientDataFromRoom;
+            if (client.CustomProperties.TryGetValue("ClientData", out object data))
+            {
+                string jsonData = (string)data;
+                ClientData clientDataFromPlayer = JsonUtility.FromJson<ClientData>(jsonData);
+                return clientDataFromPlayer;
             }
 
-            Debug.Log(" BUG : NOt found client data with id - " + id);
+            Debug.Log($"BUG: Client data not found with player - {client.NickName}");
             return null;
         }
-            
-
 
         #endregion
     }
