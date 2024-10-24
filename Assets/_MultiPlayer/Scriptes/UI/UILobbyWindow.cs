@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -39,12 +40,13 @@ namespace MH.Lobby
             _localPlayerNicNameText.text = nickname;
         }
 
-        public void CreateNewUIPlayer(ClientData client)
+        public void CreateNewUIPlayer(ClientData client, Action inviteAction)
         {
             UIPlayer newUIPlayer = Instantiate(_uiPlayerPrefab, _uiPlayerParent);
 
             newUIPlayer.Init(client.Name);
             newUIPlayer.UpdateStatus(client.Status.ToString());
+            newUIPlayer.RegisterInviteBtn(inviteAction);
 
             _clientDict[client.Id] = newUIPlayer;
         }
@@ -55,7 +57,9 @@ namespace MH.Lobby
 
             if (UIClient == null) return;
 
+            UIClient.ToggleInviteBtn(client.Status == ClientStatus.InLobby);
             UIClient.UpdateStatus(client.Status.ToString());
+           
         }
 
         public void SetPlayerNum(int currentNum)

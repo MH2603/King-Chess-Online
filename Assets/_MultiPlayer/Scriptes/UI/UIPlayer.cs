@@ -2,6 +2,7 @@ using UnityEngine;
 using MH;
 using TMPro;
 using UnityEngine.UI;
+using System;
 
 namespace MH.Lobby
 {
@@ -40,6 +41,11 @@ namespace MH.Lobby
         public void UpdateStatus(string nameStatus ) 
         {
             StatusText.text = nameStatus;   
+        }
+
+        public void RegisterInviteBtn(Action callback)
+        {
+            InviteBtn.onClick.AddListener(() => callback());
         }
 
         #endregion

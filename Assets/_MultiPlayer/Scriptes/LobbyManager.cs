@@ -25,7 +25,7 @@ namespace MH.Lobby
 
         private const string DefaultRoomName = "Default Room";
         private const int MaxPlayersPerRoom = 20; // Increased max players
-        [SerializeField] private ClientData _client;
+        [SerializeField] private ClientData localClient;
         ExitGames.Client.Photon.Hashtable playerProperties = new ExitGames.Client.Photon.Hashtable();
 
         private Photon.Realtime.Player LocalPlayer => PhotonNetwork.LocalPlayer;
@@ -101,7 +101,10 @@ namespace MH.Lobby
             ClientData client = GetClientDataFromCloud(newPlayer);
             if (client == null) return;
 
-            UILobbyWindow.CreateNewUIPlayer(client);
+            UILobbyWindow.CreateNewUIPlayer(client, () => SendInvite(newPlayer.UserId));
+            //UILobbyWindow.CreateNewUIPlayer(client, () => TestSendInvite() );
+
+            UILobbyWindow.SetPlayerNum(PhotonNetwork.PlayerList.Length);
 
         }
 
@@ -109,6 +112,37 @@ namespace MH.Lobby
 
         #region -------------- RPC Methods --------------
 
+        
+        public void SendUpdateClient()
+        {
+            photonView.RPC(nameof(UpdateClientStatusViaId), RpcTarget.Others);
+        }
+
+        [PunRPC]
+        public void UpdateClientStatusViaId(PhotonMessageInfo info)
+        {
+            ClientData client = GetClientDataFromCloud(info.Sender);
+            if (client == null) return;
+
+            UILobbyWindow.UpdateUIOtherClient(client);  
+        }
+
+        public void SendInvite(string clientId)
+        {
+            Photon.Realtime.Player targetPlayer = GetClientByUserId(clientId);
+            photonView.RPC("ListenInvite", targetPlayer);
+        }
+
+        public void TestSendInvite()
+        {
+            photonView.RPC("ListenInvite", RpcTarget.Others);
+        }
+
+        [PunRPC]
+        public void ListenInvite(PhotonMessageInfo info)
+        {
+            Debug.Log($" LOG : You get invite from {info.Sender.NickName}");
+        }
         
         #endregion
 
@@ -165,7 +199,8 @@ namespace MH.Lobby
                 ClientData client = GetClientDataFromCloud(player);
                 if (client == null) continue;
 
-                UILobbyWindow.CreateNewUIPlayer(client);
+                UILobbyWindow.CreateNewUIPlayer(client, () => SendInvite(player.UserId));
+                //UILobbyWindow.CreateNewUIPlayer(client, () => TestSendInvite());
 
             }
 
@@ -175,7 +210,7 @@ namespace MH.Lobby
 
         private void InitClientData()
         {
-            _client = new ClientData
+            localClient = new ClientData
             {
                 Id = LocalPlayer.UserId,
                 Name = LocalPlayer.NickName,
@@ -185,37 +220,25 @@ namespace MH.Lobby
             
         }
 
-        //private void UpdateClientDataToCloud()
-        //{
-        //    // convert to json
-        //    string jsonData = JsonUtility.ToJson(_client);
+        private Photon.Realtime.Player GetClientByUserId(string userId)
+        {
+            foreach (Player client in PhotonNetwork.PlayerList)
+            {
+                if(client.UserId == userId)
+                {
+                    return client;
+                }
+            }
 
-        //    // Tạo đối tượng HashTable để chứa Custom Properties
-        //    ExitGames.Client.Photon.Hashtable roomProperties = new ExitGames.Client.Photon.Hashtable();
-        //    roomProperties[_client.Id] = jsonData;
+            Debug.Log(" BUG : Not found clint with id - " + userId);
+            return null;
+        }
 
-        //    // Đặt Custom Properties cho Room
-        //    PhotonNetwork.CurrentRoom.SetCustomProperties(roomProperties);
-        //}
-
-        //private ClientData GetClientDataFromCloud(string id)
-        //{
-        //    if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(id, out object jsonDataFromRoom))
-        //    {
-        //        string jsonData = (string)jsonDataFromRoom;
-        //        ClientData clientDataFromRoom = JsonUtility.FromJson<ClientData>(jsonData);
-
-        //        return clientDataFromRoom;
-        //    }
-
-        //    Debug.Log(" BUG : NOt found client data with id - " + id);
-        //    return null;
-        //}
 
         private void UpdateClientDataToCloud()
         {
             // Convert client data to JSON
-            string jsonData = JsonUtility.ToJson(_client);
+            string jsonData = JsonUtility.ToJson(localClient);
 
             // Set the client data as a custom property of the local player
             
