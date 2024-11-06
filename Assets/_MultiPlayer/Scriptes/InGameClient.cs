@@ -1,11 +1,13 @@
+using MH;
 using Photon.Pun;
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class ClientManager : MonoBehaviourPun
+public class InGameClient : MonoBehaviourPun
 {
     [Header("------------- Component ---------------")]
-    public PhotonView photoView;
+    public PhotonView photonView;
     public CineManager chinemachineManager;
     public BoardManager boardManager;
     [Space]
@@ -13,44 +15,61 @@ public class ClientManager : MonoBehaviourPun
 
     [Header("------------- Status --------------------")]
 
-    public TypeColor colorPlayer;
+    private ClientData clientData;
     public TypeColor colorTurn;
     public bool otherPlayerWantToPlayAgain = false;
+
+
+    public TypeColor PlayerColor => clientData.PlayerColor;
+    public Photon.Realtime.Player RivalPlayer => clientData.RivalPlayer;    
+
+    public Action OnExitGame;
 
     #region( Init )
 
     private void Start()
     {
-        Init();
-    }
-
-    void Init()
-    {
-        if (PhotonNetwork.IsMasterClient)
-        {
-            colorPlayer = TypeColor.White;
-            Debug.Log("I am: Host !!!");
-        }
-        else
-        {
-            colorPlayer = TypeColor.Black;
-            Debug.Log("I am: Client !!!");
-        }
-
-        
-        chinemachineManager.SelectCinema(colorPlayer);
-
-        boardManager.Init();
-
         gui.btnAgain.onClick.AddListener(SendPlayAgain);
-        gui.btnExit.onClick.AddListener(ExitGamePlay);
-        gui.SetWaitingPopup(true);
-
-        if( colorPlayer == TypeColor.Black && PhotonNetwork.CountOfPlayers == 2) // player thu 2 se khoi dong tran dau
-        {
-            SendStartGame();   
-        }
+        gui.btnExit.onClick.AddListener(InvokeExitGamePlayEvent);
+        //gui.SetWaitingPopup(true);
     }
+
+    //void Init()
+    //{
+    //    if (PhotonNetwork.IsMasterClient)
+    //    {
+    //        PlayerColor = TypeColor.White;
+    //        Debug.Log("I am: Host !!!");
+    //    }
+    //    else
+    //    {
+    //        PlayerColor = TypeColor.Black;
+    //        Debug.Log("I am: Client !!!");
+    //    }
+
+
+    //    chinemachineManager.SelectCinema(PlayerColor);
+
+    //    boardManager.Init();
+
+    //    gui.btnAgain.onClick.AddListener(SendPlayAgain);
+    //    gui.btnExit.onClick.AddListener(ExitGamePlay);
+    //    gui.SetWaitingPopup(true);
+
+    //    if( PlayerColor == TypeColor.Black && PhotonNetwork.CountOfPlayers == 2) // player thu 2 se khoi dong tran dau
+    //    {
+    //        SendStartGame();   
+    //    }
+    //}
+
+    public void EnterGame(ClientData clientData)
+    {
+        this.clientData = clientData;
+        chinemachineManager.SelectCinema(PlayerColor);
+
+        SetupToStartGame();
+    }
+
 
     void SetupToStartGame()
     {
@@ -68,7 +87,7 @@ public class ClientManager : MonoBehaviourPun
     {
         SetupToStartGame();
 
-        photonView.RPC("GetStartGame", RpcTarget.Others);
+        photonView.RPC("GetStartGame", RivalPlayer);
     }
 
     [PunRPC]
@@ -82,7 +101,7 @@ public class ClientManager : MonoBehaviourPun
     #region( In Game Play )
     public bool IsMyTurn()
     {
-        if(colorPlayer == colorTurn)
+        if(PlayerColor == colorTurn)
         {
             return true;
         }
@@ -96,7 +115,7 @@ public class ClientManager : MonoBehaviourPun
     {
         SendDataMoveChessForOtherPlayer(idChessOld, idChessNew);
 
-        if(colorPlayer == TypeColor.Black)
+        if(PlayerColor == TypeColor.Black)
         {
             colorTurn = TypeColor.White;
         }
@@ -110,7 +129,7 @@ public class ClientManager : MonoBehaviourPun
 
     void SendDataMoveChessForOtherPlayer(Vector2 idChessOld, Vector2 idChessNew)
     {
-        photonView.RPC("GetDataMoveChessFromOtherPlayer", RpcTarget.Others , idChessOld, idChessNew);
+        photonView.RPC("GetDataMoveChessFromOtherPlayer", RivalPlayer, idChessOld, idChessNew);
     }
 
     [PunRPC]
@@ -118,7 +137,7 @@ public class ClientManager : MonoBehaviourPun
     {
         boardManager.MoveChessOtherClient(idChessOld, idChessNew);
 
-        colorTurn = colorPlayer;
+        colorTurn = PlayerColor;
 
         gui.SetTextTurn(colorTurn);
 
@@ -131,11 +150,18 @@ public class ClientManager : MonoBehaviourPun
 
     #endregion
 
+    private void InvokeExitGamePlayEvent()
+    {
+        //PhotonNetwork.LeaveRoom();
+        //SceneManager.LoadScene(0);
+
+        OnExitGame?.Invoke();
+    }
+
     public void ExitGamePlay()
     {
-        PhotonNetwork.LeaveRoom();
-
-        SceneManager.LoadScene(0);
+        boardManager.ExitBoard();
+        gui.OffEndPopup();
     }
 
     public void SendPlayAgain()
@@ -143,7 +169,7 @@ public class ClientManager : MonoBehaviourPun
         if( !otherPlayerWantToPlayAgain)
         {
             ResetBoard();
-            photonView.RPC("GetPlayAgain", RpcTarget.Others);
+            photonView.RPC("GetPlayAgain", RivalPlayer);
         }
         else
         {

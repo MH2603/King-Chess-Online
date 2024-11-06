@@ -11,7 +11,9 @@ namespace MH.Lobby
         #region --------------- Fields ----------------
         [SerializeField] private GameObject _screen;
         [SerializeField] private UIPlayer _uiPlayerPrefab;
+        [SerializeField] private UIInvite _uiInvitionPrefab;
         [SerializeField] private Transform _uiPlayerParent;
+        [SerializeField] private Transform _invitionParent;
         [Space]
         [SerializeField] private TextMeshProUGUI _playerNumText;
         [SerializeField] private TextMeshProUGUI _localPlayerNicNameText;
@@ -21,6 +23,7 @@ namespace MH.Lobby
         #region ---------------- Propertis -------------------
 
         private Dictionary<string, UIPlayer> _clientDict = new();
+        private Dictionary<string, UIPlayer> _invitionDict = new();
         
 
         #endregion
@@ -34,6 +37,8 @@ namespace MH.Lobby
         {
             _screen.SetActive(false);
         }
+
+        #region ----------- Client -------------------
 
         public void SetLocalPlayerNickName(string nickname)
         {
@@ -50,6 +55,20 @@ namespace MH.Lobby
 
             _clientDict[client.Id] = newUIPlayer;
         }
+
+
+        public void RemoveUIPlayer(string playerId)
+        {
+            if ( !_clientDict.ContainsKey(playerId) )
+            {
+                Debug.Log($" BUG: Not found UIPlayer with - {playerId}");
+                return;
+            }
+
+            Destroy(_clientDict[playerId].gameObject );
+            _clientDict.Remove(playerId);   
+        }
+
 
         public void UpdateUIOtherClient(ClientData client)
         {
@@ -77,6 +96,35 @@ namespace MH.Lobby
 
             return _clientDict[id]; 
         }
+
+        #endregion
+
+
+
+        #region --------------- Invition ----------------
+
+        public void CreateNewUIInvition(ClientData inviter, Action accept, Action reject)
+        {
+            UIInvite newUIInvition = Instantiate(_uiInvitionPrefab, _invitionParent);
+
+            newUIInvition.SetTitle(inviter.Name);
+            newUIInvition.RegisterAcceptBtn( () =>
+            {
+                accept?.Invoke();
+                Destroy(newUIInvition.gameObject);
+            });
+
+
+            newUIInvition.RegisterRejectCallback( () =>
+            {
+                reject?.Invoke();
+                Destroy(newUIInvition.gameObject);
+            });
+
+
+        }
+
+        #endregion
     }
 
 }

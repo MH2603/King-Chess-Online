@@ -1,16 +1,24 @@
 using Sirenix.OdinInspector;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+
+public enum BoardStatus
+{
+    Init,
+    Prepare,
+    Playing,
+    End
+}
 
 public class BoardManager : MonoBehaviour
 {
 
     public static BoardManager Ins;    
 
-    [Header("------------- Component --------------")]
-    public TileController tileCtrlPrefabs; 
-    public ClientManager clientManager;
+    [Header("------------- Inspector --------------")]
+    public TileController tileCtrlPrefabs;
+    public Transform TileParent;
+    public InGameClient clientManager;
 
     [Header("-------------- Status -------------------")]
     public BoardStatus status;
@@ -24,6 +32,8 @@ public class BoardManager : MonoBehaviour
     private void Awake()
     {
         Ins = this;
+
+        Init();
     }
 
     #region( Init )
@@ -37,11 +47,16 @@ public class BoardManager : MonoBehaviour
 
         // doi trang thai game thanh chuan bi
         status = BoardStatus.Prepare;
+
+        TileParent.gameObject.SetActive(false);
     }
 
     public void StartGame()
     {
+        ResetBoard();   
+
         status = BoardStatus.Playing;
+        TileParent.gameObject.SetActive(true);
     }
     
     void SpawnTile()
@@ -50,7 +65,7 @@ public class BoardManager : MonoBehaviour
         {
             for (int j=0; j < 8; j++)
             {
-                TileController newTile = Instantiate(tileCtrlPrefabs, new Vector3(i, 0, j), Quaternion.identity, this.transform);
+                TileController newTile = Instantiate(tileCtrlPrefabs, new Vector3(i, 0, j), Quaternion.identity, this.TileParent);
                 newTile.Init(i, j);
 
                 listTileCtrl.Add(newTile);  
@@ -122,7 +137,7 @@ public class BoardManager : MonoBehaviour
     {
         if( tileChosing == null &&
             CheckTileHaveChess(tile.id) &&
-            tile.chessBase.chessData.color != clientManager.colorPlayer)
+            tile.chessBase.chessData.color != clientManager.PlayerColor)
         {
             return false;
         }
@@ -237,7 +252,7 @@ public class BoardManager : MonoBehaviour
     {
         status = BoardStatus.End;
 
-        if (colorOfWinner == clientManager.colorPlayer)
+        if (colorOfWinner == clientManager.PlayerColor)
         {
             Debug.Log("--> Win !!!");
             clientManager.EndGame(true);
@@ -261,6 +276,12 @@ public class BoardManager : MonoBehaviour
         SpawnAllChess();
 
         status = BoardStatus.Prepare;
+    }
+
+    public void ExitBoard()
+    {
+        status = BoardStatus.Prepare;
+        TileParent.gameObject.SetActive(false);
     }
 
 #if UNITY_EDITOR
@@ -293,10 +314,4 @@ public class BoardManager : MonoBehaviour
 #endif
 }
 
-public enum BoardStatus
-{
-    Init,
-    Prepare,
-    Playing,
-    End
-}
+

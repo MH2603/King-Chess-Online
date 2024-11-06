@@ -9,10 +9,12 @@ namespace MH.Lobby
     public class LobbyManager : MonoBehaviourPunCallbacks
     {
 
-        #region --------------- Fields ---------------------
+        #region --------------- Inspector ---------------------
 
         public TMPro.TMP_InputField NickNameInput;
+        [Space]
         public UILobbyWindow UILobbyWindow;
+        public InGameClient InGameClient;
 
         [Space]
         public UnityEvent ConnectedCloud;
@@ -24,6 +26,7 @@ namespace MH.Lobby
         #region --------------- Properties ---------------------
 
         private const string DefaultRoomName = "Default Room";
+        private const string ClientDataName = "ClientData";
         private const int MaxPlayersPerRoom = 20; // Increased max players
         [SerializeField] private ClientData localClient;
         ExitGames.Client.Photon.Hashtable playerProperties = new ExitGames.Client.Photon.Hashtable();
@@ -90,7 +93,7 @@ namespace MH.Lobby
             InitLobbyWindow();
             UILobbyWindow.Open();
 
-            
+            InGameClient.OnExitGame += SendExitGameForRival;
         }
 
         // Gọi khi một người chơi mới tham gia phòng
@@ -108,11 +111,23 @@ namespace MH.Lobby
 
         }
 
+        // Gọi khi một người chơi rời khỏi phòng
+        public override void OnPlayerLeftRoom(Player otherPlayer)
+        {
+            Debug.Log($" LOG: {otherPlayer.NickName} just left room ");
+
+            UILobbyWindow.RemoveUIPlayer(otherPlayer.UserId);
+            //UILobbyWindow.CreateNewUIPlayer(client, () => TestSendInvite() );
+
+            UILobbyWindow.SetPlayerNum(PhotonNetwork.PlayerList.Length);
+
+        }
+
         #endregion
 
         #region -------------- RPC Methods --------------
 
-        
+
         public void SendUpdateClient()
         {
             photonView.RPC(nameof(UpdateClientStatusViaId), RpcTarget.Others);
@@ -133,15 +148,97 @@ namespace MH.Lobby
             photonView.RPC("ListenInvite", targetPlayer);
         }
 
-        public void TestSendInvite()
-        {
-            photonView.RPC("ListenInvite", RpcTarget.Others);
-        }
+        //public void TestSendInvite()
+        //{
+        //    photonView.RPC("ListenInvite", RpcTarget.Others);
+        //}
 
         [PunRPC]
         public void ListenInvite(PhotonMessageInfo info)
         {
-            Debug.Log($" LOG : You get invite from {info.Sender.NickName}");
+            Photon.Realtime.Player inviter = info.Sender;
+            ClientData client = GetClientDataFromCloud(inviter);
+            string inviterName = info.Sender.NickName;
+
+            Debug.Log($" LOG : You take invite from {inviterName}");
+
+            UILobbyWindow.CreateNewUIInvition( client, 
+                                                () => AcceptInviteFromInviter(inviter), 
+                                                () => RejectInviteFromInviter(inviter));
+
+        }
+
+        public void AcceptInviteFromInviter(Photon.Realtime.Player inviter)
+        {
+            ClientData inviterData = GetClientDataFromCloud(inviter);
+            if (inviterData.Status == ClientStatus.InGame) return;
+
+            // Set data for cilent before in game
+            localClient.Status = ClientStatus.InGame;
+            localClient.PlayerColor = TypeColor.White;
+            localClient.RivalPlayer = inviter;
+
+            UpdateClientDataToCloud();
+            SendUpdateClient();
+
+            photonView.RPC(nameof(ListenAcceptCallback), inviter);
+
+            UILobbyWindow.Close();
+            InGameClient.EnterGame(localClient);
+        }
+
+        public void RejectInviteFromInviter(Photon.Realtime.Player inviter)
+        {
+            photonView.RPC(nameof(ListenRejectCallback), inviter);
+        }
+
+
+        [PunRPC]
+        public void ListenAcceptCallback(PhotonMessageInfo info)
+        {
+            Debug.Log($" LOG: {info.Sender.NickName} accepted your invite - Status : {localClient.Status.ToString()}");
+
+            if (localClient.Status == ClientStatus.InGame) return;
+
+            localClient.Status = ClientStatus.InGame;
+            localClient.PlayerColor = TypeColor.Black;
+            localClient.RivalPlayer = info.Sender;
+
+            UpdateClientDataToCloud();
+            SendUpdateClient();
+
+            UILobbyWindow.Close();
+            InGameClient.EnterGame(localClient);
+        }
+
+        [PunRPC]
+        public void ListenRejectCallback(PhotonMessageInfo info)
+        {
+            Debug.Log($" LOG: {info.Sender.NickName} reject your invite - Status : {localClient.Status.ToString()}");
+        }
+
+        public void ExitChessGame()
+        {
+            localClient.Status = ClientStatus.InLobby;
+
+            UpdateClientDataToCloud();
+            SendUpdateClient();
+
+            InGameClient.ExitGamePlay();
+            UILobbyWindow.Open();
+        }
+
+        private void SendExitGameForRival()
+        {
+            photonView.RPC(nameof(ListenRivalExitGame), localClient.RivalPlayer);
+
+            ExitChessGame();
+        }
+
+        [PunRPC]
+        public void ListenRivalExitGame()
+        {
+            ExitChessGame();
         }
         
         #endregion
@@ -159,16 +256,6 @@ namespace MH.Lobby
                 IsOpen = true
             };
             PhotonNetwork.JoinOrCreateRoom(DefaultRoomName, roomOptions, TypedLobby.Default);
-
-            
-            //if(  PhotonNetwork.CountOfRooms == 0)
-            //{
-            //    PhotonNetwork.CreateRoom(DefaultRoomName);
-            //    return;
-            //}
-
-            //PhotonNetwork.JoinRoom(DefaultRoomName);
-            
 
         }
 
@@ -242,11 +329,11 @@ namespace MH.Lobby
 
             // Set the client data as a custom property of the local player
             
-            playerProperties["ClientData"] = jsonData;
+            playerProperties[ClientDataName] = jsonData;
             PhotonNetwork.LocalPlayer.CustomProperties = playerProperties;
             PhotonNetwork.SetPlayerCustomProperties(playerProperties);  
 
-            Debug.Log($"  - Send Client Data: {PhotonNetwork.LocalPlayer.CustomProperties["ClientData"]}");
+            Debug.Log($"  - Send Client Data: {PhotonNetwork.LocalPlayer.CustomProperties[ClientDataName]}");
         }
 
         private ClientData GetClientDataFromCloud(Photon.Realtime.Player client)
@@ -258,7 +345,7 @@ namespace MH.Lobby
             //    return clientDataFromPlayer;
             //}
 
-            if (client.CustomProperties.TryGetValue("ClientData", out object data))
+            if (client.CustomProperties.TryGetValue(ClientDataName, out object data))
             {
                 string jsonData = (string)data;
                 ClientData clientDataFromPlayer = JsonUtility.FromJson<ClientData>(jsonData);
