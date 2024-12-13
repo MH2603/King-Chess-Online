@@ -80,7 +80,9 @@ public class InGameClient : MonoBehaviourPun
         boardManager.StartGame();
 
         gui.SetWaitingPopup(false);
+        gui.TurnViusal.SetActive(true);
         gui.SetTextTurn(colorTurn);
+        
     }
     
     void SendStartGame()
@@ -145,6 +147,7 @@ public class InGameClient : MonoBehaviourPun
 
     public void EndGame(bool isMeWin)
     {
+        gui.TurnViusal.SetActive(false);
         gui.ShowEndPopup(isMeWin);  
     }
 

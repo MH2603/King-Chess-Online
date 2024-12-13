@@ -5,6 +5,7 @@ using UnityEngine;
 public class Onl_GUI : MonoBehaviour
 {
     [Header("------------------------- Component ----------------")]
+    public GameObject TurnViusal;
     public TextMeshProUGUI textTurn;
     public GameObject popupWaiting;
     [Space]
